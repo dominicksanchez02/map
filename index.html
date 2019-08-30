@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+  <title>Customer Location SMS</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+    #map {
+      height: 400px;
+      display: none;
+    }
+    .gm-style-mtc button {
+      font-size: 12px;
+      padding: 0px 10px;
+      height: 29px;
+    }
+    #searchBox {
+      top: 328px !important;
+      border-radius: 3px;
+      border: none;
+      left: 10px !important;
+      width: 65%;
+      font-size: 17px;
+      padding: 5px 10px;
+      box-shadow: rgba(0, 0, 0, 0.3) 0px 1px 4px -1px;
+    }
+  </style>
+</head>
+<body>
+  <input id="searchBox" class="form-control" style="position: absolute; display: none;" placeholder="Find a place">
+  <div id="map"></div>
+
+  <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+
+  <script>
+    const $map = document.getElementById('map');
+    const $searchBox = document.getElementById('searchBox');
+    
+    let addressstr;
+    let map;
+    let infoWindow;
+    let marker;
+    let markers = [];
+
+    function initMap() {
+      map = new google.maps.Map($map, {
+        center: {lat: -34.397, lng: 150.644},
+        zoom: 6
+      });
+
+      infoWindow = new google.maps.InfoWindow;
+      geocoder = new google.maps.Geocoder;
+
+      const options = {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0
+      };
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(({ coords: { latitude: lat, longitude: lng }}) => {
+          console.log(lat, lng);
+          newMarkerLocation(map, { lat, lng }, geocoder, infoWindow, true); 
+        }, () => {
+          console.log('Error: The Geolocation service failed.');
+        }, options);
+      } else {
+        console.log('Error: Your browser doesn\'t support geolocation.');
+      }
+    }
+
+    const newMarkerLocation = (map, pos, geocoder, infoWindow, adjustZoom) => {
+      geocoder.geocode({'location': pos}, (results, status) => {
+        if (status === 'OK') {
+          if (results[0]) {
+    
+            const formattedAddress = results[0].formatted_address;
+
+            setMarker({ pos, map, formattedAddress });
+
+            // if (adjustZoom) {
+            //   map.setZoom(18);
+            //   map.setMapTypeId('hybrid');
+            // }
+
+            createSearch(map, marker);
+
+            $map.style.display = 'block';
+            $searchBox.style.display = 'block';
+
+          } else {
+            console.log('No results found');
+          }
+        } else {
+          console.log('Geocoder failed due to: ' + status);
+        }
+      });
+    }
+
+    function createSearch(map, marker) {
+      // Create the search box and link it to the UI element.
+      const searchBox = new google.maps.places.SearchBox($searchBox);
+      map.controls[google.maps.ControlPosition.TOP_LEFT].push($searchBox);
+
+      // Bias the SearchBox results towards current map's viewport.
+      map.addListener('bounds_changed', () => {
+        searchBox.setBounds(map.getBounds());
+      });
+
+      searchBox.addListener('places_changed', () => {
+        const places = searchBox.getPlaces();
+
+        if (places.length == 0) {
+          return;
+        }
+
+        // Clear out the old marker
+        marker.setMap(null);
+    
+        if (!places[0].geometry) {
+          console.log("Returned place contains no geometry");
+          return;
+        }
+
+        const pos = places[0].geometry.location;
+
+        setMarker({
+          map,
+          pos,
+          formattedAddress: ''
+        });
+
+        geocodePosition(pos);
+      });
+    }
+
+    function geocodePosition(pos) {
+      geocoder.geocode({
+        latLng: pos
+      }, function(responses) {
+        if (responses && responses.length > 0) {
+          const formattedAddress = responses[0].formatted_address;
+          infoWindow.setContent(formattedAddress);
+          $searchBox.value = formattedAddress;
+        } else {
+          infoWindow.setContent('Cannot determine address at this location.');
+        }
+      });
+    }
+
+    function setMarker({ pos, map, formattedAddress }) {
+      marker = new google.maps.Marker({
+        position: pos,
+        map: map,
+        draggable: true
+      });
+
+      infoWindow.open(map, marker);
+      infoWindow.setPosition(pos);
+      infoWindow.setContent(formattedAddress);
+      map.setCenter(pos);
+      map.setZoom(18);
+
+      $searchBox.value = formattedAddress;
+
+      google.maps.event.addListener(marker, 'dragend', function() {
+        geocodePosition(marker.getPosition());
+      });
+    }
+
+  </script>
+
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAqh12fJgB6vZ2spZ4_CJkgsoIQGyMksAE&libraries=places&callback=initMap"></script>
+</body>
+</html>
